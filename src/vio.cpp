@@ -381,7 +381,7 @@ int main(int argc, char** argv) {
   auto time_start = std::chrono::high_resolution_clock::now();
 
   if (show_gui) {
-    pangolin::CreateWindowAndBind("Main", 1800, 1000);
+    pangolin::CreateWindowAndBind("Main", 1350, 750);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -805,7 +805,7 @@ void alignButton() { basalt::alignSVD(vio_t_ns, vio_t_w_i, gt_t_ns, gt_t_w_i); }
 
 void saveTrajectoryButton() {
   if (tum_rgbd_fmt) {
-    std::ofstream os("trajectory.txt");
+    std::ofstream os("saveTraj/trajectory.txt");
 
     os << "# timestamp tx ty tz qx qy qz qw" << std::endl;
 
@@ -825,7 +825,7 @@ void saveTrajectoryButton() {
         << "Saved trajectory in TUM RGB-D Dataset format in trajectory.txt"
         << std::endl;
   } else if (euroc_fmt) {
-    std::ofstream os("trajectory.csv");
+    std::ofstream os("saveTraj/trajectory.csv");
 
     os << "#timestamp [ns],p_RS_R_x [m],p_RS_R_y [m],p_RS_R_z [m],q_RS_w "
           "[],q_RS_x [],q_RS_y [],q_RS_z []"
@@ -843,7 +843,7 @@ void saveTrajectoryButton() {
     std::cout << "Saved trajectory in Euroc Dataset format in trajectory.csv"
               << std::endl;
   } else {
-    std::ofstream os("trajectory_kitti.txt");
+    std::ofstream os("saveTraj/trajectory_kitti.txt");
 
     for (size_t i = 0; i < vio_t_ns.size(); i++) {
       Eigen::Matrix<double, 3, 4> mat = vio_T_w_i[i].matrix3x4();

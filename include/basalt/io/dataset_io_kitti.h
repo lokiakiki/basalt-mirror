@@ -88,7 +88,7 @@ class KittiVioDataset : public VioDataset {
   std::vector<ImageData> get_image_data(int64_t t_ns) {
     std::vector<ImageData> res(num_cams);
 
-    const std::vector<std::string> folder = {"/image_0/", "/image_1/"};
+    const std::vector<std::string> folder = {"/image_00/data/", "/image_01/data/"};
 
     for (size_t i = 0; i < num_cams; i++) {
       std::string full_image_path = path + folder[i] + image_path[t_ns];
@@ -136,10 +136,56 @@ class KittiIO : public DatasetIoInterface {
     data->num_cams = 2;
     data->path = path;
 
-    read_image_timestamps(path + "/times.txt");
+    read_image_timestamps(path + "/image_00/timestamps.txt");
+    read_imu_data(path + "/oxts");
 
     if (fs::exists(path + "/poses.txt")) {
       read_gt_data_pose(path + "/poses.txt");
+    }
+  }
+
+  void read_imu_data(const std::string &path) {
+    data->accel_data.clear();
+    data->gyro_data.clear();
+
+    std::ifstream ts(path + "/100timestamps.txt");    
+    std::string line;
+    int imuId = 0;
+
+    while (std::getline(ts, line)) {    // imu timestamps
+      uint64_t timestamp = timeToTimestamps(line);
+      std::stringstream imuDataPath;
+      imuDataPath << std::setfill('0') << std::setw(10) << imuId << ".txt";
+      std::ifstream imuDataFile(path + "/100data/" + imuDataPath.str());  //100hz imu folder
+      std::string imuLine;
+
+      if (std::getline(imuDataFile, imuLine)){
+        Eigen::Vector3d gyro, accel;
+        char *cha = (char*)imuLine.data();
+        double tmpd;
+        int tmpi;
+        Eigen::Matrix3d kittiImu2FactImu;
+        kittiImu2FactImu << -1, 0, 0,
+                            0, -1, 0,
+                            0, 0, 1;
+
+        sscanf(cha, "%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %d %d %d %d %d", 
+                           &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpd,
+                           &tmpd, &accel[0], &accel[1], &accel[2], &tmpd, &tmpd, &tmpd, &gyro[0], &gyro[1], &gyro[2],
+                           &tmpd, &tmpd, &tmpd, &tmpd, &tmpd, &tmpi, &tmpi, &tmpi, &tmpi, &tmpi);
+
+        data->accel_data.emplace_back();
+        data->accel_data.back().timestamp_ns = timestamp;
+        data->accel_data.back().data = kittiImu2FactImu * accel;
+
+        data->gyro_data.emplace_back();
+        data->gyro_data.back().timestamp_ns = timestamp;
+        data->gyro_data.back().data = kittiImu2FactImu * gyro;
+
+        imuId +=1;
+      }else{  //imu data less timestamps
+        break;
+      }
     }
   }
 
@@ -148,20 +194,32 @@ class KittiIO : public DatasetIoInterface {
   VioDatasetPtr get_data() { return data; }
 
  private:
+
+ uint64_t timeToTimestamps(std::string line){
+    tm tm_;
+    int year, month, day, hour, minute, second, nsecond;
+    char *c = (char*)line.data();
+
+    sscanf(c, "%d-%d-%d %d:%d:%d.%d", &year, &month, &day, &hour, &minute, &second, &nsecond);
+    tm_.tm_year = year - 1900;
+    tm_.tm_mon = month - 1;
+    tm_.tm_mday = day;
+    tm_.tm_hour = hour;
+    tm_.tm_min = minute;
+    tm_.tm_sec = second;
+    time_t t_ = mktime(&tm_);
+
+    return t_*1000000000 + nsecond;;
+  }
+
+  //without imu
   void read_image_timestamps(const std::string &path) {
     std::ifstream f(path);
     std::string line;
     while (std::getline(f, line)) {
-      if (line[0] == '#') continue;
-      std::stringstream ss(line);
-
-      double t_s;
-      ss >> t_s;
-
-      int64_t t_ns = t_s * 1e9;
-
+      int64_t t_ns = timeToTimestamps(line);      
       std::stringstream ss1;
-      ss1 << std::setfill('0') << std::setw(6) << data->image_timestamps.size()
+      ss1 << std::setfill('0') << std::setw(10) << data->image_timestamps.size()
           << ".png";
 
       data->image_timestamps.emplace_back(t_ns);
